@@ -2,11 +2,12 @@
 (require racket/control) ; for abbreviations: e.g. call/prompt
 
 ;; I'm aiming towards being able to write something along the lines of...
-;; (The implicit loop in the routine might be a bad idea.)
 ;
 ; routine iota(start increment) {
-;     yield(start);
-;     start <- start + increment;
+;     loop {
+;         yield(start);
+;         start <- start + increment;
+;     }
 ; }
 ;
 ; routine main() {
@@ -20,20 +21,21 @@
 
 ;; A "closer to Racket" version might be:
 '(routine (iota start increment)
-          (yield start)
-          (set! start (+ start increment)))
+          (loop
+           (yield start)
+           (set! start (+ start increment))))
 
 '(do ((i (iota 1 1) (iota)))
-   ((> i 10) (display i)(newline))
-   (display i)(newline))
+   ((> i 10) (displayln "Done"))
+   (displayln i))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; A generic test program
-(define (test name proc)
+(define (test name coroutine)
   (displayln name)
-  (do ((i (proc 1 1) (proc)))
-    ((> i 10) (displayln i))
+  (do ((i (coroutine 1 1) (coroutine)))
+    ((> i 10) (displayln "Done"))
     (displayln i)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -135,8 +137,7 @@
                  (yield start)
                  (set! start (+ start increment))))))
        yield-tag
-       (lambda (result)
-         result)
+       values ; Equivalent to (lambda (result) result)
        args))))
 
 (test "iota4" iota4)
@@ -146,23 +147,22 @@
 ;; Factor out the boilerplate:
 
 (define (make-coroutine5 proc)
-   (let* ((yield-tag (make-continuation-prompt-tag))
-          (resume-k #f)
-          (yield (lambda (result)
-                   (call/cc (lambda (k)
-                              (set! resume-k k)
-                              (abort/cc yield-tag result))
-                            yield-tag))))
-     (lambda args
-       (call/prompt
-        (lambda (args)
-          (if resume-k
-              (resume-k #f)
-              (apply proc (cons yield args))))
-        yield-tag
-        (lambda (result)
-          result)
-        args))))
+  (let* ((yield-tag (make-continuation-prompt-tag))
+         (resume-k #f)
+         (yield (lambda (result)
+                  (call/cc (lambda (k)
+                             (set! resume-k k)
+                             (abort/cc yield-tag result))
+                           yield-tag))))
+    (lambda args
+      (call/prompt
+       (lambda (args)
+         (if resume-k
+             (resume-k #f)
+             (apply proc (cons yield args))))
+       yield-tag
+       values
+       args))))
 
 (define (iota5-body yield start increment)
   (do () (#f)
@@ -176,23 +176,22 @@
 ;; Use call/comp instead of call/cc:
 
 (define (make-coroutine6 proc)
-   (let* ((yield-tag (make-continuation-prompt-tag))
-          (resume-k #f)
-          (yield (lambda (result)
-                   (call/comp (lambda (k)
-                              (set! resume-k k)
-                              (abort/cc yield-tag result))
-                            yield-tag))))
-     (lambda args
-       (call/prompt
-        (lambda (args)
-          (if resume-k
-              (resume-k #f)
-              (apply proc (cons yield args))))
-        yield-tag
-        (lambda (result)
-          result)
-        args))))
+  (let* ((yield-tag (make-continuation-prompt-tag))
+         (resume-k #f)
+         (yield (lambda (result)
+                  (call/comp (lambda (k)
+                               (set! resume-k k)
+                               (abort/cc yield-tag result))
+                             yield-tag))))
+    (lambda args
+      (call/prompt
+       (lambda (args)
+         (if resume-k
+             (resume-k #f)
+             (apply proc (cons yield args))))
+       yield-tag
+       values
+       args))))
 
 (define (iota6-body yield start increment)
   (do () (#f)
@@ -206,24 +205,30 @@
 ;; Make it possible to pass a value in on
 ;; subsequent calls and have yield return it.
 
+; routine sum() {
+;     total <- 0;
+;     loop {
+;         total <- total + yield(total);
+;     }
+; }
+
 (define (make-coroutine7 proc)
-   (let* ((yield-tag (make-continuation-prompt-tag))
-          (resume-k #f)
-          (yield (lambda (result)
-                   (call/comp (lambda (k)
-                              (set! resume-k k)
-                              (abort/cc yield-tag result))
-                            yield-tag))))
-     (lambda args
-       (call/prompt
-        (lambda (args)
-          (if resume-k
-              (apply resume-k args)
-              (apply proc (cons yield args))))
-        yield-tag
-        (lambda (result)
-          result)
-        args))))
+  (let* ((yield-tag (make-continuation-prompt-tag))
+         (resume-k #f)
+         (yield (lambda (result)
+                  (call/comp (lambda (k)
+                               (set! resume-k k)
+                               (abort/cc yield-tag result))
+                             yield-tag))))
+    (lambda args
+      (call/prompt
+       (lambda (args)
+         (if resume-k
+             (apply resume-k args)
+             (apply proc (cons yield args))))
+       yield-tag
+       values
+       args))))
 
 (define iota7
   (make-coroutine7 (lambda (yield start increment)
@@ -231,11 +236,13 @@
                        (yield start)
                        (set! start (+ start increment))))))
 
-(define sum7 (make-coroutine7 (lambda (yield)
-                               (let loop ((total 0))
-                                 (loop (+ total (yield total)))))))
+(define sum7
+  (make-coroutine7 (lambda (yield)
+                     (let loop ((total 0))
+                       (loop (+ total (yield total)))))))
 
-(do ((x (iota7 1 1) (iota7))
+(displayln "iota7 & sum7")
+(do ((x (iota7 3 2) (iota7))
      (y (sum7) (sum7 x)))
-  ((> x 10) (displayln "Done"))
+  ((> x 20) (displayln "Done"))
   (printf "x: ~a; y: ~a\n" x y))
