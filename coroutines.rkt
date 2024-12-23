@@ -25,9 +25,43 @@
            (yield start)
            (set! start (+ start increment))))
 
+;; The main loop...
 '(do ((i (iota 1 1) (iota)))
    ((> i 10) (displayln "Done"))
    (displayln i))
+
+;; ...or maybe...
+'(let ((i (iota 1 1)))
+   (loop-until done
+               (displayln i)
+               (set! i (iota))
+               (when (> i 10)
+                 (done)))
+   (displayln "Done"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Loop forever:
+(define-syntax-rule (loop-forever expr ...)
+  (do () (#f) expr ...))
+
+;; Loop until a specified "done" function is called:
+(define-syntax-rule (loop-until done expr ...)
+  (let* ((done-tag (make-continuation-prompt-tag))
+         (done (lambda ()
+                 (abort/cc done-tag #f))))
+    (call/prompt
+     (lambda () (do () (#f) expr ...))
+     done-tag
+     values)))
+
+(let ((i 0))
+  (loop-until done
+              (displayln "hello")
+              (set! i (+ i 1))
+              (when (> i 5)
+                (done))
+              (displayln "world")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -37,6 +71,15 @@
   (do ((i (coroutine 1 1) (coroutine)))
     ((> i 10) (displayln "Done"))
     (displayln i)))
+
+'(define (test-new name coroutine)
+   (let ((i (coroutine 1 1)))
+     (loop-until done
+                 (displayln i)
+                 (set! i (coroutine))
+                 (when (> i 10)
+                   (done)))
+     (displayln "Done")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -246,3 +289,5 @@
      (y (sum7) (sum7 x)))
   ((> x 20) (displayln "Done"))
   (printf "x: ~a; y: ~a\n" x y))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
