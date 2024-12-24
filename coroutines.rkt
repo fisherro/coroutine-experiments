@@ -53,7 +53,7 @@
     (call/prompt
      (lambda () (do () (#f) expr ...))
      done-tag
-     values)))
+     void)))
 
 (let ((i 0))
   (loop-until done
@@ -291,3 +291,79 @@
   (printf "x: ~a; y: ~a\n" x y))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Use the loop macros:
+
+(define iota8
+  (make-coroutine7 (lambda (yield start increment)
+                     (loop-forever
+                      (yield start)
+                      (set! start (+ start increment))))))
+
+(define sum8
+  (make-coroutine7 (lambda (yield)
+                     (let ((total 0))
+                       (loop-forever
+                        (set! total (+ total (yield total))))))))
+
+(displayln "iota8 & sum8")
+(let ((x (iota8 1 1))
+      (y (sum8)))
+  (loop-until done
+              (printf "x: ~a; y: ~a\n" x y)
+              (when (> x 10)
+                (done))
+              (set! x (iota8))
+              (set! y (sum8 x))))
+(displayln "Done")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The "all routines are coroutines" language as
+;; I've envisioned it so far means that plain old
+;; subroutines would need to be written like this:
+
+; routine square(n) {
+;     loop {
+;         n <- yield(n * n);
+;     }
+; }
+
+;; Otherwise, they'd only work once.
+;; Maybe there'd be special syntactic sugar for
+;; these?
+
+; subroutine square(n) {
+;     yield(n * n);
+; }
+
+;; Also, there is no way to define a "class" of
+;; coroutines. I'd originally considered a
+;; duplicate operation that for creating a new
+;; instance of a coroutine from an existing one.
+;; And maybe that's what I'll do.
+
+; another-iota-instance <- duplicate(iota);
+
+;; Which would mean that a coroutine would need
+;; to keep track of its "core" for such duplication.
+;;
+;; Maybe this should be able to make the initial
+;; call?
+
+; by2 <- duplicate(iota(2, 2));
+
+;; In the end, though, it probably makes sense
+;; for coroutines and subroutines to actually be
+;; different and to have a explicit coroutine
+;; create operator.
+
+; subroutine square(n) { yield(n * n); }
+; coroutine iota(start, increment) /* ... */
+; iota-instance1 <- create(iota);
+; iota-instance2 <- create(iota(2, 2));
+
+;; Subroutines and coroutines could be anonymous.
+
+; list <- map(subroutine(n){ yield(n + 1); }, list);
+; instance <- create(coroutine(n){ loop { yield(n); } });
