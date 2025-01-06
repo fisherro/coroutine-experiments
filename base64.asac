@@ -1,0 +1,37 @@
+/*
+I want to be able to code by composing operations in a pipeline.
+I want to be able to write the operations as routines instead of state machines.
+*/
+
+// string iterator
+// bits in chars iterator
+// chunk by 6 bits
+// bit chunk to number
+// look up number in table
+
+routine list-iterator(list) {
+	loop-forever {
+		yield(first(list));
+		list <- rest(list);
+	}
+}
+
+routine string-iterator(s) {
+	list-iterator(string->list(s));
+}
+
+routine chars->bits(source) {
+	//TODO: Make this its own pipeline?
+	loop-forever {
+		var c <- source();
+		if (not c) yield(false);
+		var n <- char->integer(c);
+		var s <- number->string(n, 2);
+		var chars <- string->list(s);
+		var bits-as-strings <- map(string, chars);
+		var bits <- map(string->number, bits-as-strings);
+		list-iterator(bits);
+	}
+}
+
+
